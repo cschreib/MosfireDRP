@@ -302,12 +302,13 @@ def handle_rectification(maskname, in_files, wavename, band_pass, files, options
         lossy_compress=False)
 
 
-def r_interpol(ls, ss, lfid, tops, top, shift_pix=0, pad=[0,0], fill_value=0.0):
+def r_interpol(ls, ss, lfid, tops, top, kind="linear", shift_pix=0, pad=[0,0], fill_value=0.0):
     '''
     Interpolate the data ss(ls, fs) onto a fiducial wavelength vector.
     ls[n_spatial, n_lam] - wavelength array
     ss[n_spatial, n_lam] - corresponding data array
     lfid[n_lam] - wavelength fiducial to interpolate onto
+    kind - scheme to use for interpolation (linear, nearest, ...)
     shift_pix - # of pixels to shift in spatial direction
     pad - # of pixels to pad in spatial direction
     fill_value - passed through to interp1d
@@ -328,23 +329,22 @@ def r_interpol(ls, ss, lfid, tops, top, shift_pix=0, pad=[0,0], fill_value=0.0):
 
         if len(ok) < 100: continue
 
-        f = II.interp1d(ll[ok], sp[ok], bounds_error=False, 
-            fill_value = fill_value)
-            
+        f = II.interp1d(ll[ok], sp[ok], bounds_error=False,
+            fill_value = fill_value, kind=kind)
 
         output[i,:] = f(lfid)
 
     # Now rectify in spatial
     vert_shift = tops-top-shift_pix
 
-    f = II.interp1d(ls[10, :], vert_shift, bounds_error=False, 
-        fill_value = fill_value)
+    f = II.interp1d(ls[10, :], vert_shift, bounds_error=False,
+        fill_value = fill_value, kind=kind)
 
     for i in xrange(output.shape[1]):
         to_shift = f(fidl[i])
         x = np.arange(output.shape[0])
         y = II.interp1d(x, output[:, i], bounds_error=False,
-            fill_value=fill_value)
+            fill_value=fill_value, kind=kind)
 
         output[:,i] = y(x + to_shift)
 
@@ -358,6 +358,7 @@ def handle_rectification_helper(edgeno):
     global edges, dats, vars, itimes, shifts, lambdas, band, fidl,all_shifts
 
     pix = np.arange(2048)
+    kind = Options.wavelength["interpolation"]
     
     edge = edges[edgeno]
 
@@ -392,18 +393,21 @@ def handle_rectification_helper(edgeno):
     else: sign = -1
     for shift in shifts:
         output = r_interpol(ll, eps, fidl, tops, top, shift_pix=shift/0.18,
-            pad=[mnshift, mxshift], fill_value = np.nan)
+            pad=[mnshift, mxshift], fill_value=np.nan, kind=kind)
         epss.append(sign * output)
 
         ivar = 1/vv
-        bad = np.where(np.isfinite(ivar) ==0)
-        ivar[bad] = 0.0
+        # Mask NaNs and infs from the variance array before interpolation
+        # (only if not nearest neighbor)
+        if kind is not "nearest":
+            bad = np.where(np.isfinite(ivar) == 0)
+            ivar[bad] = 0.0
         output = r_interpol(ll, ivar, fidl, tops, top, shift_pix=shift/0.18,
-            pad=[mnshift, mxshift], fill_value=np.nan) 
+            pad=[mnshift, mxshift], fill_value=np.nan, kind=kind)
         ivss.append(output)
 
         output = r_interpol(ll, it, fidl, tops, top, shift_pix=shift/0.18,
-            pad=[mnshift, mxshift], fill_value=np.nan) 
+            pad=[mnshift, mxshift], fill_value=np.nan, kind=kind)
         itss.append(output)
 
         sign *= -1

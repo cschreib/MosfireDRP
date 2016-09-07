@@ -24,5 +24,7 @@ wavelength = {
         "version": 2,
         "fractional-wavelength-search": 0.99935, # used in determining oned wavelength solutions
         "chebyshev-degree": 5, # polynomial order for fitting wavelengths
+        #"interpolation": "linear" # method used for interpolation when rectifying frames
+        "interpolation": "nearest" # method used for interpolation when rectifying frames
 }
 
